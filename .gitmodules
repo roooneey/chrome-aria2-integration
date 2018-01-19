@@ -1,0 +1,5 @@
+[submodule "webui-aria2"]
+	path = webui-aria2
+	url = https://github.com/ziahamza/webui-aria2.git
+	branch = master
+	update = rebase
