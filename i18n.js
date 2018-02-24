@@ -32,6 +32,9 @@ this.i18n = {
 	"enablecap": {
 		"en": "Enable Capture"
 	},
+	"noAria2Description": {
+		"en": "No-Aria2 key: If you press Shift key when clicking a link, the download task will download in the browser instead of be sent to Aria2."
+	},
 	"sizerule": {
 		"en": "File Size"
 	},

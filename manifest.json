@@ -1,6 +1,6 @@
 {
   "name": "Aria2c Integration",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "manifest_version": 2,
   "minimum_chrome_version": "31",
   "description": "Download files with aria2",
@@ -23,6 +23,7 @@
     "notifications",
     "storage",
     "cookies",
+    "proxy",
     "*://*/"
   ],
   "browser_action": {

@@ -79,18 +79,7 @@ chrome.contextMenus.onClicked.addListener(function (info, tab) {
     "use strict";
     if (info.menuItemId === "linkclick") {
         chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
-
-            getCookies(info.linkUrl, function (cookies) {
-
-                var aria2 = new ARIA2(settings.get('rpcpath')), 
-                    params = {};
-            
-                params.referer = tabs[0].url;
-                params.header = "Cookie:" + cookies
-
-                aria2.addUri(info.linkUrl, params);
-                showNotification();  
-            });
+            addToAria2WithInfo({url: info.linkUrl}, tabs[0].url, directAdd);
         });
     }
 });
@@ -161,37 +150,119 @@ function isCapture(size, taburl, url, name) {
     return res;
 }
 
+function getAria2ProxyString(pacString) {
+    if (pacString == 'DIRECT') return "";
+    if (pacString.indexOf("PROXY ") != -1) { // Use HTTP proxy first
+        var s1 = pacString.substring(pacString.indexOf("PROXY ") + 6);
+        if (s1.indexOf(";") != -1)
+            s1 = s1.substring(0, s1.indexOf(";"));
+            return s1;
+    }
+    // then try SOCKS(some socks proxy servers like Shadowsocks-RSS supports HTTP on socks ports.).
+    var s1 = pacString.substring(pacString.indexOf(" ") + 1);
+    if (s1.indexOf(";") != -1)
+        s1 = s1.substring(0, s1.indexOf(";"));
+    return s1;
+}
+
+function getAria2ProxyStringFromChromeProxy(proxyObject) {
+    return proxyObject.host + ":" + proxyObject.port;
+}
+
 function captureAdd(Item, taburl) {
     "use strict";
     if (isCapture(Item.fileSize, taburl, Item.url, Item.filename) === 1) {
-        
-        getCookies(Item.url, function(cookies) {
+        addToAria2WithInfo(Item, taburl, cancelAndAdd);
+    }
+}
 
+function addToAria2WithInfo(Item, referer, addCallback) {
+    getCookies(Item.url, function(cookies) {
+        chrome.proxy.settings.get({}, function(details) {
             var aria2 = new ARIA2(settings.get('rpcpath')), 
-                params = {};
-            
-            params.referer = taburl;
+            params = {};
+        
+            params.referer = referer;
             params.header = "Cookie:" + cookies;
             params.out = Item.filename;
+            switch (details.value.mode) {
+                case 'pac_script':
+                var pacScript = details.value.pacScript;
+                if (pacScript.data != undefined) {
+                    params['all-proxy'] = getAria2ProxyString(eval(pacScript.data + "FindProxyForURL('" + Item.url + "', '" + new URL(Item.url).hostname + "')")); 
+                    addCallback(Item, params, aria2);
+                } else if (pacScript.url != undefined) {
+                    var xmlHttp = new XMLHttpRequest();
+                    xmlHttp.onreadystatechange = function() {
+                        if (xmlHttp.readyState == 4) {
+                            if (xmlHttp.status == 200) {
+                                params['all-proxy'] = getAria2ProxyString(eval(xmlHttp.responseText + "FindProxyForURL('" + Item.url + "', '" + new URL(Item.url).hostname + "')")); 
+                            }
+                            addCallback(Item, params, aria2);
+                        }
+                    }
+                    xmlHttp.open("GET", pacScript.url, true);
+                }
+                break;
 
-            chrome.downloads.cancel(Item.id, function() {
-                aria2.addUri(Item.url, params);
-            });
+                case 'fixed_servers':
+                var iurl = new URL(Item.url);
+                var rules = details.value.rules;
+                if (rules.bypassList != undefined && rules.bypassList.indexOf(iurl.hostname) != -1)
+                    addCallback(Item, params, aria2);
+                else {
+                    if (rules.singleProxy != undefined)
+                        params['all-proxy'] = getAria2ProxyStringFromChromeProxy(rules.singleProxy);
+                    else if (iurl.protocol == 'http:' && rules.proxyForHttp != undefined)
+                        params['all-proxy'] = getAria2ProxyStringFromChromeProxy(rules.proxyForHttp);
+                    else if (iurl.protocol == 'https:' && rules.proxyForHttps != undefined)
+                        params['all-proxy'] = getAria2ProxyStringFromChromeProxy(rules.proxyForHttps);
+                    else if ((iurl.protocol == 'http:' || iurl.protocol == 'https:') && rules.fallbackProxy != undefined)
+                        params['all-proxy'] = getAria2ProxyStringFromChromeProxy(rules.fallbackProxy);
+                        addCallback(Item, params, aria2);
+                }
 
-            //console.log(Item);
-            showNotification();
+                default: // we don't process direct and auto_detect, download as usual
+                addCallback(Item, params, aria2);
+            }
         });
-    }
+    });
+}
+
+function cancelAndAdd(item, params, aria2) {
+    chrome.downloads.cancel(item.id, function() {
+        aria2.addUri(item.url, params);
+    });
+
+    //console.log(Item);
+    showNotification();
+}
+
+function directAdd(item, params, aria2) {
+    aria2.addUri(item.url, params);
+    showNotification();
 }
 
 
 chrome.downloads.onDeterminingFilename.addListener(function (Item, s) {
     "use strict";
     //console.log(Item);
-    if (settings.get('captureCheckbox')) {
+    if (settings.get('captureCheckbox') && !shiftPressed) {
         chrome.tabs.query({'active': true, 'currentWindow': true}, function (tabs) {
 
             captureAdd(Item, tabs[0].url);
         });
     }
 });
+
+var shiftPressed = false;
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse){
+    switch(request.type){
+        case 'shiftPressed':
+            shiftPressed = true;
+            break;
+        case 'keyup':
+            shiftPressed = false;
+            break;
+    }
+}); 
