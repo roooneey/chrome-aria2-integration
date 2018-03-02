@@ -151,7 +151,7 @@ function isCapture(size, taburl, url, name) {
 }
 
 function getAria2ProxyString(pacString) {
-    if (pacString == 'DIRECT') return "";
+    if (pacString.indexOf('DIRECT') != -1 || pacString.indexOf('__PROXY__') != -1) return "";
     if (pacString.indexOf("PROXY ") != -1) { // Use HTTP proxy first
         var s1 = pacString.substring(pacString.indexOf("PROXY ") + 6);
         if (s1.indexOf(";") != -1)
