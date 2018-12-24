@@ -44,7 +44,13 @@ this.manifest = {
             "tab": i18n.get("capture"),
             "name": "captureCheckbox",
             "type": "checkbox",
-            "label": i18n.get("enablecap")
+            "label": i18n.get("enablecap"),
+        },
+		{
+            "tab": i18n.get("capture"),
+            "name": "noAria2Description",
+            "type": "description",
+            "text": i18n.get("noAria2Description")
         },
 		{
             "tab": i18n.get("capture"),
